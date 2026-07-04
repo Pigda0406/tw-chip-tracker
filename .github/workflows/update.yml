@@ -37,3 +37,5 @@ jobs:
           else
             echo "無新週別,略過。"
           fi
+
+# (re-index)
