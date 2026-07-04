@@ -1,0 +1,39 @@
+name: 更新大戶籌碼資料
+
+on:
+  schedule:
+    # TDCC 股權分散表每週更新(資料日為每週最後交易日,約下週一/二公布)。
+    # 每天跑一次;程式偵測到新週別才會 commit,重複執行不會重複寫入。
+    - cron: '0 10 * * 1-5'   # 台北 18:00
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-chip
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: 抓取並更新 data.json
+        run: node scripts/build-data.mjs
+        env:
+          TZ: Asia/Taipei
+      - name: 有新週別才 commit & push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if [ -n "$(git status --porcelain docs/data.json)" ]; then
+            git add docs/data.json
+            git commit -m "chore: 更新大戶籌碼資料 ($(TZ=Asia/Taipei date '+%Y-%m-%d'))"
+            git push
+          else
+            echo "無新週別,略過。"
+          fi
