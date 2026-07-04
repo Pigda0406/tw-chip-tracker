@@ -4,7 +4,7 @@ const state = {
   data: null,
   level: 'big400',   // big400 | big1000
   mode: 'accumulate',// accumulate | distribute | all
-  span: 1,           // 比較 N 週前
+  span: 4,           // 比較 N 期前(預設約一個月)
   markets: { TWSE: true, TPEX: true },
   sortKey: 'dBig',
   sortDir: -1,
@@ -42,11 +42,12 @@ function setup() {
   const d = state.data;
   const W = d.weeks.length;
   document.getElementById('meta').innerHTML =
-    `更新時間:<strong>${d.updated_at}</strong>　|　週別(共 ${W} 週):${d.weeks.join('、')}`;
+    `更新時間:<strong>${d.updated_at}</strong>　|　期別(共 ${W} 期):${d.weeks.join('、')}`;
 
   const span = document.getElementById('span');
   const maxSpan = Math.max(1, W - 1);
-  for (let i = 1; i <= maxSpan; i++) span.add(new Option(i + ' 週前', i, false, i === state.span));
+  state.span = Math.min(state.span, maxSpan);
+  for (let i = 1; i <= maxSpan; i++) span.add(new Option(i + ' 期前', i, false, i === state.span));
   if (W < 2) { span.disabled = true; }
 
   const banner = document.getElementById('banner');
@@ -92,10 +93,11 @@ function compute() {
     const prevH = hLi >= 0 ? s.holders[hci] : null;
     const dHold = (hci < hLi && prevH) ? Math.round((holders - prevH) / prevH * 1000) / 10 : null;
 
+    // 訊號以「大戶比例變化」為主(股東人數為輔:有變化時要方向一致,沒變化不擋)
     let sig = 'flat';
-    if (dBig != null && dHold != null) {
-      if (dBig > 0 && dHold < 0) sig = 'buy';
-      else if (dBig < 0 && dHold > 0) sig = 'sell';
+    if (dBig != null) {
+      if (dBig > 0.3 && (dHold == null || dHold <= 0)) sig = 'buy';
+      else if (dBig < -0.3 && (dHold == null || dHold >= 0)) sig = 'sell';
     }
     if (state.mode === 'accumulate' && sig !== 'buy') continue;
     if (state.mode === 'distribute' && sig !== 'sell') continue;
