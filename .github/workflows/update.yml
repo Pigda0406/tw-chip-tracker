@@ -22,17 +22,21 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: 抓取並更新 data.json
+      - name: 更新大戶籌碼 data.json
         run: node scripts/build-data.mjs
         env:
           TZ: Asia/Taipei
-      - name: 有新週別才 commit & push
+      - name: 更新飆股找尋器 finder.json(官方增量)
+        run: node scripts/build-finder-update.mjs
+        env:
+          TZ: Asia/Taipei
+      - name: 有更新才 commit & push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          if [ -n "$(git status --porcelain docs/data.json)" ]; then
-            git add docs/data.json
-            git commit -m "chore: 更新大戶籌碼資料 ($(TZ=Asia/Taipei date '+%Y-%m-%d'))"
+          if [ -n "$(git status --porcelain docs/data.json docs/finder.json)" ]; then
+            git add docs/data.json docs/finder.json
+            git commit -m "chore: 更新籌碼/飆股資料 ($(TZ=Asia/Taipei date '+%Y-%m-%d'))"
             git push
           else
             echo "無新週別,略過。"

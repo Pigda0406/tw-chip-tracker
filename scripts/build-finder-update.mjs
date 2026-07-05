@@ -1,0 +1,86 @@
+// ===========================================================================
+// build-finder-update.mjs — 飆股找尋器「每週增量更新」(純官方資料)
+// twsthr 只是一次性歷史種子;此後每週:
+//   大戶(週) ← 官方 TDCC 股權分散;股價/市值 ← TWSE/TPEX
+// 依 TDCC 週別去重,重複執行不會重複寫入。更新 docs/finder.json 既有股票池。
+// ===========================================================================
+import { readFile, writeFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const FILE = process.env.FINDER_FILE || join(__dirname, '..', 'docs', 'finder.json');
+const UA = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) finder-update' };
+const MAX_WEEKS = 30, MAX_MONTHS = 15;
+
+const isCommon = (c) => /^[1-9]\d{3}$/.test(c);
+const num = (v) => { const n = parseFloat(String(v).replace(/[,\s]/g, '')); return Number.isNaN(n) ? null : n; };
+const int = (v) => { const n = parseInt(String(v).replace(/[,\s]/g, ''), 10); return Number.isNaN(n) ? 0 : n; };
+async function fetchText(u) { for (let i = 0; i < 4; i++) { try { const r = await fetch(u, { headers: UA }); if (r.ok) return await r.text(); } catch {} await new Promise((r) => setTimeout(r, 1500 * (i + 1))); } throw new Error('fetch fail ' + u); }
+async function fetchJson(u) { return JSON.parse(await fetchText(u)); }
+
+// 官方 TDCC:大戶(≥400=L12-15、≥1000=L15)、股東人數(L17)
+async function fetchTDCC() {
+  const text = await fetchText('https://opendata.tdcc.com.tw/getOD.ashx?id=1-5');
+  const lines = text.replace(/^﻿/, '').trim().split(/\r?\n/);
+  const by = new Map(); let date = null;
+  for (let i = 1; i < lines.length; i++) {
+    const p = lines[i].split(','); if (p.length < 6) continue;
+    const d = p[0].trim(), code = p[1].trim(), lvl = int(p[2]), people = int(p[3]), pct = num(p[5]) || 0;
+    if (!isCommon(code)) continue; if (!date) date = d;
+    let r = by.get(code); if (!r) { r = { big400: 0, big1000: 0, holders: 0 }; by.set(code, r); }
+    if (lvl >= 12 && lvl <= 15) r.big400 += pct;
+    if (lvl === 15) r.big1000 = pct;
+    if (lvl === 17) r.holders = people;
+  }
+  const iso = date ? `${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}` : null;
+  return { date: iso, by };
+}
+
+// TWSE/TPEX:最新收盤 + 已發行股數 → 市值
+async function fetchPriceCap() {
+  const m = new Map();
+  try { const tw = await fetchJson('https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL'); for (const x of tw) { const c = String(x.Code).trim(); if (isCommon(c)) m.set(c, { close: num(x.ClosingPrice), shares: null }); } } catch {}
+  try { const cap = await fetchJson('https://openapi.twse.com.tw/v1/opendata/t187ap03_L'); for (const x of cap) { const c = String(x['公司代號']).trim(); const s = m.get(c); if (s) s.shares = num(x['已發行普通股數或TDR原股發行股數']); } } catch {}
+  try { const tp = await fetchJson('https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes'); for (const x of tp) { const c = String(x.SecuritiesCompanyCode).trim(); if (isCommon(c) && !m.has(c)) { const cap = num(x.Capitals); m.set(c, { close: num(x.Close), shares: cap != null ? cap / 10 : null }); } } } catch {}
+  return m;
+}
+
+async function main() {
+  const data = JSON.parse(await readFile(FILE, 'utf8'));
+  const [tdcc, pc] = await Promise.all([fetchTDCC(), fetchPriceCap()]);
+  if (!tdcc.date) throw new Error('TDCC 無資料');
+  if (data.wdates.includes(tdcc.date)) { process.stderr.write(`本週 ${tdcc.date} 已存在,略過。\n`); return; }
+
+  const month = tdcc.date.slice(0, 7);              // YYYY-MM
+  const lastMonth = data.mdates.at(-1);
+  const newMonth = month !== lastMonth;
+  data.wdates.push(tdcc.date);
+  if (newMonth) data.mdates.push(month);
+  const wi = data.wdates.length - 1;
+
+  for (const [code, s] of Object.entries(data.stocks)) {
+    // 週大戶:補齊長度再放本週(官方無此檔則 null)
+    while (s.big400.length < wi) { s.big400.push(null); s.big1000.push(null); }
+    const t = tdcc.by.get(code);
+    s.big400.push(t ? Math.round(t.big400 * 100) / 100 : null);
+    s.big1000.push(t ? Math.round(t.big1000 * 100) / 100 : null);
+    // 現價/市值
+    const p = pc.get(code);
+    if (p && p.close != null) { s.price = p.close; if (p.shares) s.mcap = Math.round(p.close * p.shares / 1e8); }
+    // 月收盤/股東人數
+    const closeVal = (p && p.close != null) ? p.close : (s.close.at(-1) ?? null);
+    const holdVal = t ? t.holders : (s.holders.at(-1) ?? null);
+    if (newMonth) { s.close.push(closeVal); s.holders.push(holdVal); }
+    else { if (s.close.length) s.close[s.close.length - 1] = closeVal; if (s.holders.length) s.holders[s.holders.length - 1] = holdVal; }
+  }
+
+  // 修剪視窗
+  if (data.wdates.length > MAX_WEEKS) { const drop = data.wdates.length - MAX_WEEKS; data.wdates.splice(0, drop); for (const s of Object.values(data.stocks)) { s.big400.splice(0, drop); s.big1000.splice(0, drop); } }
+  if (data.mdates.length > MAX_MONTHS) { const drop = data.mdates.length - MAX_MONTHS; data.mdates.splice(0, drop); for (const s of Object.values(data.stocks)) { s.close.splice(0, drop); s.holders.splice(0, drop); } }
+
+  data.updated_at = new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Taipei' }).replace(' ', 'T') + '+08:00';
+  await writeFile(FILE, JSON.stringify(data), 'utf8');
+  process.stderr.write(`完成:新增週別 ${tdcc.date}(${newMonth ? '含新月份 ' + month : '同月更新'}),共 ${Object.keys(data.stocks).length} 檔,週軸 ${data.wdates.length}。\n`);
+}
+main().catch((e) => { console.error('更新失敗:', e); process.exit(1); });
