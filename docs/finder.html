@@ -31,6 +31,9 @@
     <label>位階上限
       <select id="maxpos"><option value="101" selected>不限</option><option value="60">≤60(偏底)</option><option value="40">≤40(貼底)</option><option value="20">≤20(最底)</option></select>
     </label>
+    <label>營收YoY
+      <select id="minrev"><option value="-9999" selected>不限</option><option value="0">&gt;0%</option><option value="10">&gt;10%</option><option value="20">&gt;20%</option><option value="30">&gt;30%</option></select>
+    </label>
     <span class="market-group">
       <label class="chk"><input type="checkbox" id="mTWSE" checked /> 上市</label>
       <label class="chk"><input type="checkbox" id="mTPEX" checked /> 上櫃</label>
@@ -46,7 +49,7 @@
   </main>
 
   <footer>
-    <p><strong>邏輯</strong>:① 盤整打底 — 近 N 月股價振幅小、現價未突破;② 大戶吸籌 — 近幾週大戶(≥400/≥1000張)持股比例淨增、且股東人數下降。兩者兼具 = 起漲前的潛在飆股。</p>
+    <p><strong>邏輯</strong>:① 盤整打底 — 近 N 月股價振幅小、現價未突破;② 大戶吸籌 — 近幾週大戶(≥400/≥1000張)持股比例淨增;③ 基本面 — 月營收年增率(YoY)。三者兼具(籌碼+基本面+底部)= 起漲前的潛在飆股。</p>
     <p class="disc">「位階%」=現價在盤整區間的位置(0=區間底、100=區間頂),越低越接近底部。大戶資料週更新、股價/人數月更新。本頁僅供參考,<strong>非投資建議,不保證上漲</strong>。</p>
   </footer>
   <script src="finder.js"></script>

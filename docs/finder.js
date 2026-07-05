@@ -2,7 +2,7 @@
 
 const state = {
   data: null, level: 'big400',
-  acc: 13, base: 6, maxRange: 35, minAcc: 1.5, maxPos: 101,
+  acc: 13, base: 6, maxRange: 35, minAcc: 1.5, maxPos: 101, minRev: -9999,
   markets: { TWSE: true, TPEX: true },
   sortKey: 'dBig', sortDir: -1,
 };
@@ -19,6 +19,7 @@ const COLS = [
   { key: 'rangePct', label: '盤整振幅%', num: true },
   { key: 'pos', label: '位階%', num: true },
   { key: 'dHold', label: '股東Δ%', num: true },
+  { key: 'revYoY', label: '營收YoY%', num: true },
 ];
 
 const lastVals = (arr, k) => arr.filter((x) => x != null).slice(-k);
@@ -33,10 +34,10 @@ async function load() {
 function setup() {
   const d = state.data;
   document.getElementById('meta').innerHTML =
-    `更新:<strong>${d.updated_at}</strong>　|　大戶週資料至 ${d.wdates.at(-1)}、股價月資料至 ${d.mdates.at(-1)}　<a href="index.html" style="color:var(--accent)">↩ 回大戶籌碼</a>`;
+    `更新:<strong>${d.updated_at}</strong>　|　大戶週資料至 ${d.wdates.at(-1)}、營收月 ${d.rev_month || '—'}　<a href="index.html" style="color:var(--accent)">↩ 回大戶籌碼</a>`;
   const bind = (id, key, isNum) => { const el = document.getElementById(id); el.value = state[key]; el.addEventListener('change', () => { state[key] = isNum ? +el.value : el.value; render(); }); };
   bind('level', 'level', false); bind('acc', 'acc', true); bind('base', 'base', true);
-  bind('range', 'maxRange', true); bind('minacc', 'minAcc', true); bind('maxpos', 'maxPos', true);
+  bind('range', 'maxRange', true); bind('minacc', 'minAcc', true); bind('maxpos', 'maxPos', true); bind('minrev', 'minRev', true);
   document.getElementById('mTWSE').addEventListener('change', (e) => { state.markets.TWSE = e.target.checked; render(); });
   document.getElementById('mTPEX').addEventListener('change', (e) => { state.markets.TPEX = e.target.checked; render(); });
 }
@@ -69,13 +70,16 @@ function compute() {
     const hs = lastVals(s.holders, state.base);
     const dHold = hs.length >= 2 && hs[0] > 0 ? Math.round((hs.at(-1) - hs[0]) / hs[0] * 1000) / 10 : null;
 
-    // 篩選:大戶吸籌 + 盤整 + 未突破
+    const revYoY = s.revYoY ?? null;
+
+    // 篩選:大戶吸籌 + 盤整 + 未突破 + 營收
     if (dBig < state.minAcc) continue;
     if (rangePct > state.maxRange) continue;
     if (price > hi * 1.05) continue;   // 已明顯突破 → 排除(要起漲前)
     if (pos > state.maxPos) continue;  // 位階上限(只看還在底部區的)
+    if (state.minRev > -9999 && (revYoY == null || revYoY < state.minRev)) continue;
 
-    rows.push({ code, name: s.name, market: s.market, mcap: s.mcap, price, big: bigNow, dBig, rising, rangePct, pos, dHold });
+    rows.push({ code, name: s.name, market: s.market, mcap: s.mcap, price, big: bigNow, dBig, rising, rangePct, pos, dHold, revYoY });
   }
   return rows;
 }
@@ -100,6 +104,7 @@ function render() {
       <td>${r.rangePct.toFixed(1)}</td>
       <td>${r.pos}</td>
       <td class="${dHoldCls}">${r.dHold == null ? '—' : (r.dHold > 0 ? '+' : '') + r.dHold.toFixed(1) + '%'}</td>
+      <td class="${r.revYoY == null ? '' : (r.revYoY > 0 ? 'up' : 'down')}">${r.revYoY == null ? '—' : (r.revYoY > 0 ? '+' : '') + r.revYoY.toFixed(1) + '%'}</td>
     </tr>`;
   }).join('');
   document.querySelectorAll('#body tr').forEach((tr) => tr.onclick = () => window.open(`https://tw.stock.yahoo.com/quote/${tr.dataset.code}`, '_blank'));
