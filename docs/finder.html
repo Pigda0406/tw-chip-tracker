@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>飆股候選找尋器(盤整+大戶吸籌)</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>飆股候選找尋器 <span style="font-size:.7em;color:var(--muted)">盤整打底 + 大戶吸籌</span></h1>
+    <p class="sub" id="meta">資料載入中…　<a href="index.html" style="color:var(--accent)">↩ 回大戶籌碼</a></p>
+  </header>
+
+  <section class="controls">
+    <label>大戶門檻
+      <select id="level"><option value="big400">400 張</option><option value="big1000">1000 張</option></select>
+    </label>
+    <label>吸籌期間
+      <select id="acc"><option value="8">8 週</option><option value="13" selected>13 週(約3月)</option><option value="26">26 週</option></select>
+    </label>
+    <label>盤整期間
+      <select id="base"><option value="3">3 月</option><option value="6" selected>6 月</option><option value="12">12 月</option></select>
+    </label>
+    <label>最大振幅
+      <select id="range"><option value="25">25%</option><option value="35" selected>35%</option><option value="50">50%</option><option value="999">不限</option></select>
+    </label>
+    <label>大戶最少增
+      <select id="minacc"><option value="0.5">+0.5pp</option><option value="1.5" selected>+1.5pp</option><option value="3">+3pp</option></select>
+    </label>
+    <label>位階上限
+      <select id="maxpos"><option value="101" selected>不限</option><option value="60">≤60(偏底)</option><option value="40">≤40(貼底)</option><option value="20">≤20(最底)</option></select>
+    </label>
+    <span class="market-group">
+      <label class="chk"><input type="checkbox" id="mTWSE" checked /> 上市</label>
+      <label class="chk"><input type="checkbox" id="mTPEX" checked /> 上櫃</label>
+    </span>
+    <span class="count" id="count"></span>
+  </section>
+
+  <main>
+    <div class="table-wrap">
+      <table id="tbl"><thead><tr id="headRow"></tr></thead><tbody id="body"></tbody></table>
+    </div>
+    <p class="empty" id="empty" hidden>沒有符合條件的股票。試著放寬「最大振幅」或降低「大戶最少增」。</p>
+  </main>
+
+  <footer>
+    <p><strong>邏輯</strong>:① 盤整打底 — 近 N 月股價振幅小、現價未突破;② 大戶吸籌 — 近幾週大戶(≥400/≥1000張)持股比例淨增、且股東人數下降。兩者兼具 = 起漲前的潛在飆股。</p>
+    <p class="disc">「位階%」=現價在盤整區間的位置(0=區間底、100=區間頂),越低越接近底部。大戶資料週更新、股價/人數月更新。本頁僅供參考,<strong>非投資建議,不保證上漲</strong>。</p>
+  </footer>
+  <script src="finder.js"></script>
+</body>
+</html>

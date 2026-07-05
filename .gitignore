@@ -1,3 +1,6 @@
 node_modules/
 .DS_Store
 *.log
+
+# twsthr 逐檔快取(本地,不部署)
+scripts/thr_cache/
